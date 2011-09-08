@@ -6,7 +6,7 @@ Mojolicious::Plugin::UrlWith - Preserve parts of the url
 
 =head1 VERSION
 
-0.02
+0.03
 
 =head1 DESCRIPTION
 
@@ -28,7 +28,18 @@ use Mojo::Base 'Mojolicious::Plugin';
 use Mojo::Util qw/ xml_escape /;
 use Mojolicious::Plugin::TagHelpers;
 
-our $VERSION = eval '0.02';
+our $VERSION = eval '0.03';
+
+=head1 ATTRIBUTES
+
+=head2 parse_fragment
+
+Will remove the '#fragment' part from the first arugment to L</url_with>,
+and use it use it for L<Mojo::URL/fragment>.
+
+=cut
+
+__PACKAGE__->attr(parse_fragment => sub { 0 });
 
 =head1 HELPERS
 
@@ -55,27 +66,51 @@ Will result in C<http://somedomain.com/some/named/route?page=1&age=42>.
 
 Will result in C<http://somedomain.com/path?page=1&random=24>.
 
+=item $controller->url_with('/path', [ c => 313 ]);
+
+Will result in C<http://somedomain.com/path?c=313>.
+
 =back
+
+Summary: A hash-ref will be merged with existing query params, while
+an array-ref will create a new set of query params.
 
 =cut
 
 sub url_with {
     my $self = shift;
     my $controller = shift;
-    my $args = ref $_[-1] eq 'HASH' ? pop : {};
-    my $url = @_ ? $controller->url_for(@_) : $controller->req->url->clone;
+    my $args = ref($_[-1]) =~ /^(?:HASH|ARRAY)$/ ? pop : undef;
+    my @args = @_;
     my $query = $controller->req->url->query->clone;
+    my $url;
 
-    $url->query($query);
-
-    for my $key (keys %$args) {
-        if(defined $args->{$key}) {
-            $query->append($key => $args->{$key});
-        }
-        else {
-            $query->remove($key);
+    if($self->parse_fragment) {
+        if(defined $_[0] and ref $_[0] eq '') {
+            $args[0] =~ s/#(.*)$//;
+            $url = $controller->url_for(@args);
+            $url->fragment($1);
         }
     }
+    if(!$url) {
+        $url = @args ? $controller->url_for(@args) : $controller->req->url->clone;
+    }
+
+    if(ref $args eq 'HASH') { # merge
+        for my $key (keys %$args) {
+            if(defined $args->{$key}) {
+                $query->append($key => $args->{$key});
+            }
+            else {
+                $query->remove($key);
+            }
+        }
+    }
+    elsif(ref $args eq 'ARRAY') { # replace
+        $query = Mojo::Parameters->new(@$args);
+    }
+
+    $url->query($query);
 
     return $url;
 }
@@ -101,7 +136,7 @@ sub link_with {
     }
 
     for my $i (reverse 0..@_-1) {
-        if(ref $_[$i] eq 'HASH') {
+        if(ref($_[$i]) =~ /^(?:HASH|ARRAY)/) {
             push @url_args, @_[0..$i];
             unshift @tag_args, @_[$i+1..@_-1];
             last;
@@ -127,6 +162,7 @@ sub register {
 
     $config->{'url_with_alias'} ||= 'url_with';
     $config->{'link_with_alias'} ||= 'link_with';
+    $self->parse_fragment($config->{'parse_fragment'} || 0);
 
     $app->helper($config->{'url_with_alias'} => sub { $self->url_with(@_) });
     $app->helper($config->{'link_with_alias'} => sub { $self->link_with(@_) });
