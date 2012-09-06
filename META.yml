@@ -20,10 +20,10 @@ no_index:
     - inc
     - t
 requires:
-  Mojolicious: 1
+  Mojolicious: 3.3
 resources:
   bugtracker: http://rt.cpan.org/NoAuth/Bugs.html?Dist=Mojolicious-Plugin-UrlWith
   homepage: http://search.cpan.org/dist/Mojolicious-Plugin-UrlWith
   license: http://dev.perl.org/licenses/
   repository: git://github.com/jhthorsen/mojolicious-plugin-urlwith
-version: 0.0501
+version: 0.0502
